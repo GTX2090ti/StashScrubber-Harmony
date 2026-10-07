@@ -1,7 +1,7 @@
 name: stash_scrubber_flutter
 description: Stash media server client (Flutter for HarmonyOS).
 publish_to: 'none'
-version: 1.6.58+568
+version: 1.6.70+570
 
 environment:
   sdk: ^3.9.2
@@ -15,6 +15,11 @@ dependencies:
   http: ^1.2.0
   shared_preferences: ^2.3.0
   shared_preferences_ohos: ^2.2.0
+  local_auth: ^2.3.0
+  local_auth_ohos:
+    git:
+      url: https://github.com/GTX2090ti/local_auth_ohos.git
+      ref: main
 
 dev_dependencies:
   flutter_test:

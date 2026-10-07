@@ -74,6 +74,8 @@ class AppSettings extends ChangeNotifier {
   static const _kSlot = 'active_slot';
   static const _kManualLock = 'manual_lock';
   static const _kReason = 'switch_reason';
+  static const _kSafeMode = 'safe_mode';
+  static const _kBiometricLock = 'biometric_lock';
 
   List<Profile> profiles = [];
   String currentProfileName = '';
@@ -85,6 +87,18 @@ class AppSettings extends ChangeNotifier {
   int lastLatencyMs = -1;
   int lanLatencyMs = -1;
   int wanLatencyMs = -1;
+
+  /// 安全模式（Stash NSFW Toggle）：开启后缩略图打码，长按临时查看。
+  bool _safeMode = false;
+  bool get safeMode => _safeMode;
+
+  /// 面容解锁（Face ID / Touch ID）：开启后启动与回前台需生物识别验证。
+  bool _biometricLock = false;
+  bool get biometricLock => _biometricLock;
+
+  /// 本次会话是否已完成生物识别验证（内存态，重启后重置）。
+  bool _unlockedThisSession = false;
+  bool get unlockedThisSession => _unlockedThisSession;
 
   bool storageAvailable = true;
   bool _loaded = false;
@@ -166,6 +180,8 @@ class AppSettings extends ChangeNotifier {
       activeSlot = slot == 'wan' ? AddrSlot.wan : AddrSlot.lan;
       manualLock = p.getBool(_kManualLock) ?? false;
       lastSwitchReason = p.getString(_kReason) ?? '';
+      _safeMode = p.getBool(_kSafeMode) ?? false;
+      _biometricLock = p.getBool(_kBiometricLock) ?? false;
       storageAvailable = true;
     } catch (e) {
       storageAvailable = false;
@@ -201,6 +217,8 @@ class AppSettings extends ChangeNotifier {
       await p.setString(_kSlot, activeSlot.name);
       await p.setBool(_kManualLock, manualLock);
       await p.setString(_kReason, lastSwitchReason);
+      await p.setBool(_kSafeMode, _safeMode);
+      await p.setBool(_kBiometricLock, _biometricLock);
     } catch (e) {
       storageAvailable = false;
       notifyListeners();
@@ -248,6 +266,33 @@ class AppSettings extends ChangeNotifier {
   Future<void> setAppearance(Appearance mode) async {
     appearance = mode;
     await _flush();
+  }
+
+  /// 切换安全模式（缩略图打码）。
+  Future<void> setSafeMode(bool v) async {
+    _safeMode = v;
+    await _flush();
+  }
+
+  /// 切换面容解锁（Face ID / Touch ID）。
+  Future<void> setBiometricLock(bool v) async {
+    _biometricLock = v;
+    if (!v) {
+      _unlockedThisSession = false;
+    }
+    await _flush();
+  }
+
+  /// 生物识别验证通过后标记本会话已解锁。
+  void markUnlocked() {
+    _unlockedThisSession = true;
+    notifyListeners();
+  }
+
+  /// 需要重新验证（回前台/关闭开关）时重置解锁标记。
+  void resetUnlocked() {
+    _unlockedThisSession = false;
+    notifyListeners();
   }
 
   // ---------- 选路 ----------

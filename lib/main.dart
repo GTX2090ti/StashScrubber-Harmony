@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'pages/home_page.dart';
+import 'pages/lock_page.dart';
 import 'pages/login_page.dart';
 import 'pages/settings_page.dart';
 import 'settings/app_settings.dart';
@@ -38,17 +39,64 @@ class StashScrubberApp extends StatefulWidget {
   State<StashScrubberApp> createState() => _StashScrubberAppState();
 }
 
-class _StashScrubberAppState extends State<StashScrubberApp> {
+class _StashScrubberAppState extends State<StashScrubberApp>
+    with WidgetsBindingObserver {
+  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
+  bool _lockShowing = false;
+  bool _wasBackgrounded = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     AppSettings.instance.addListener(_onSettingsChanged);
+    // 首帧渲染后检查是否需要面容解锁（App 启动场景）
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowLock());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AppSettings.instance.removeListener(_onSettingsChanged);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      // 真正切到后台才标记；inactive（如系统 Face ID 弹窗）不算
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        _wasBackgrounded = true;
+        break;
+      case AppLifecycleState.resumed:
+        if (_wasBackgrounded) {
+          _wasBackgrounded = false;
+          final cfg = AppSettings.instance;
+          if (cfg.biometricLock) {
+            cfg.resetUnlocked();
+            _maybeShowLock();
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  /// 已开启面容解锁且本次会话未验证时，弹出锁屏页。
+  void _maybeShowLock() {
+    final cfg = AppSettings.instance;
+    if (!cfg.biometricLock || cfg.unlockedThisSession || _lockShowing) return;
+    _lockShowing = true;
+    _navKey.currentState?.push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => LockPage(
+          onUnlocked: () => _lockShowing = false,
+        ),
+      ),
+    );
   }
 
   void _onSettingsChanged() {
@@ -92,6 +140,7 @@ class _StashScrubberAppState extends State<StashScrubberApp> {
     return MaterialApp(
       title: 'Stash',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navKey,
       themeMode: mode,
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
